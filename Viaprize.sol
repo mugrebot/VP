@@ -276,32 +276,6 @@ function distribute() public {
         }
     }
 
-    // Transfer donations to the platform
-    if (total_donations > 0) {
-        payable(PLATFORM_ADDRESS).transfer(total_donations);
-    }
-
-    // Distribute refunds based on the proportion of each funder's contribution
-    uint256 remaining_refunds = total_refunds;
-    for (uint i = 0; i < funderAddresses.length; i++) {
-        address funder = funderAddresses[i];
-        uint256 funderContribution = funders[funder];
-        uint256 refund = (total_refunds * funderContribution) / (total_funds - total_donations - total_rewards);
-        if (refund > 0) {
-        payable(funder).transfer(refund);
-        }
-        if (remaining_refunds >= refund) {
-            remaining_refunds -= refund;
-        } else {
-            remaining_refunds = 0;
-        }
-    }
-
-    // Transfer remaining refunds, if any, to the platform
-    if (remaining_refunds > 0) {
-        payable(PLATFORM_ADDRESS).transfer(remaining_refunds);
-    }
-
 
     // Reset the totals
     total_rewards = 0;
