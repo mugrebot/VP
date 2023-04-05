@@ -239,23 +239,8 @@ function distribute() public {
     require(funderAddresses.length > 0, "There are no funders");
 
     uint256 admin_votes = total_votes / 20; // Calculate the 5% voting power for admins
-    total_donations += admin_votes; // Add admin votes to the total donations
 
-    // Calculate unused votes for admins
-    uint256 unused_admin_votes = admin_votes;
-    for (uint i = 0; i < submissions.length; i++) {
-        // Subtract the votes used by admins for each submission from the total unused votes
-        if (votes[msg.sender][i] == 1) {
-            if (unused_admin_votes >= submissions[i].votes) {
-                unused_admin_votes -= submissions[i].votes;
-            } else {
-                unused_admin_votes = 0;
-            }
-        }
-    }
 
-    // Add the unused votes to total_donations
-    total_donations += unused_admin_votes;
 
     // Transfer 5% of the total funds to the platform
     uint256 platformDonation = (total_funds * 5) / 100;
@@ -284,29 +269,19 @@ function distribute() public {
     total_refunds = 0;
 }
 
-
     // Add a new function to use unused votes
 function use_unused_votes(uint _submission) public {
     require(admins[msg.sender] == true, "You are not an admin");
     require(block.timestamp < voting_time, "Voting period has ended");
     require(_submission < submissions.length, "Invalid submission");
-
-    uint256 admin_votes = total_votes / 20; // Calculate the 5% voting power for admins
-    uint256 used_admin_votes = 0;
-
+    require(total_funds - total_votes > 0, "There are no unused votes");
     // Calculate the used admin votes for each submission
-    for (uint i = 0; i < submissions.length; i++) {
-        if (votes[msg.sender][i] == 1) {
-            used_admin_votes += submissions[i].votes;
-        }
-    }
 
-    require(used_admin_votes <= admin_votes, "Used admin votes exceed total admin votes");
-
-    uint256 unused_admin_votes = admin_votes - used_admin_votes;
+    uint256 unused_admin_votes = total_funds - total_votes;
 
     // Use unused votes for the specified submission
     submissions[_submission].votes += unused_admin_votes;
+    total_votes += unused_admin_votes;
 }
 }
 
