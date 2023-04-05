@@ -9,6 +9,7 @@ uint256 voting_time; //this will be the time that the voting period ends
 
 mapping (address => uint256) public funders; //this will be a mapping of the addresses of the funders to the amount of eth they have contributed
 
+
 mapping (address => mapping(uint256 => uint256)) public votes; //this will be a mapping of the addresses of the funders to the amount of votes they have
 
 address public constant PLATFORM_ADDRESS = 0xcd258fCe467DDAbA643f813141c3560FF6c12518; //this will be the address of the platform
@@ -32,9 +33,6 @@ uint256 public total_funds; //this will be the total amount of funds raised
 
 uint256 public total_rewards; //this will be the total amount of rewards available
 
-uint256 public total_refunds; //this will be the total amount of refunds available
-
-uint256 public total_donations; //this will be the total amount of donations to the platform
 
 
 
@@ -42,16 +40,6 @@ constructor () {
     //add as many admins as you need to -- replace msg.sender with the address of the admin(s) for now this means the deployer will be the sole admin
     admins[msg.sender] = true;
     admins[0xcd258fCe467DDAbA643f813141c3560FF6c12518] = true;
-}
-
-//create a view function for submission time
-function get_submission_time() public view returns (uint256) {
-    return submission_time;
-}
-
-//create a view function for voting time
-function get_voting_time() public view returns (uint256) {
-    return voting_time;
 }
 
 
@@ -99,93 +87,25 @@ function addSubmission(address submitter, string memory submissionText) public {
 
 
 //create a function to allow funders to vote for a submission, as well as choose option 1, 2, or 3
-function vote(uint _option, uint _submission, uint amount) public {
+function vote(uint _submission, uint amount) public {
     require(block.timestamp < voting_time, "Voting period has ended");
-    require(_option == 1 || _option == 2 || _option == 3, "Invalid option");
     require(_submission < submissions.length, "Invalid submission");
-    require(votes[msg.sender][_submission] == 0, "You have already voted for this submission");
     require(amount <= funders[msg.sender], "You do not have enough funds to vote this amount");
 
-    uint256 admin_votes = total_votes / 20; // Calculate the 5% voting power for admins
-    total_votes -= admin_votes; // Temporarily remove admin votes from the total
-
-    if (_option == 1) {
-        submissions[_submission].votes += amount;
-        total_votes += amount;
-    }
-    if (_option == 2) {
-        total_donations += amount;
-    }
-    if (_option == 3) {
-        total_refunds += amount;
-    }
-
-    votes[msg.sender][_submission] = _option;
-    total_votes += admin_votes; // Add admin votes back to the total
+    submissions[_submission].votes += amount;
     funders[msg.sender] -= amount; // Update funder's balance
+
+
+    
 }
 
-function change_vote(uint _option, uint _submission, uint amount) public {
+function change_vote(uint _previous_submission, uint _submission, uint amount) public {
     require(block.timestamp < voting_time, "Voting period has ended");
-    require(_option == 1 || _option == 2 || _option == 3, "Invalid option");
     require(_submission < submissions.length, "Invalid submission");
-    require(votes[msg.sender][_submission] != 0, "You have not voted for this submission");
 
-    uint256 previous_vote = votes[msg.sender][_submission];
-    uint256 admin_votes = total_votes / 20; // Calculate the 5% voting power for admins
+    submissions[_previous_submission].votes -= amount;
+    submissions[_submission].votes += amount;
 
-    // Temporarily remove admin votes from the total
-    if (total_votes >= admin_votes) {
-        total_votes -= admin_votes;
-    }
-
-    // Revert previous vote
-    if (previous_vote == 1) {
-        if (amount <= submissions[_submission].votes) {
-            submissions[_submission].votes -= amount;
-            if (total_votes >= amount) {
-                total_votes -= amount;
-            }
-        }
-    }
-    if (previous_vote == 2) {
-        if (amount <= total_donations) {
-            total_donations -= amount;
-        }
-    }
-    if (previous_vote == 3) {
-        if (amount <= total_refunds) {
-            total_refunds -= amount;
-        }
-    }
-
-    // Apply new vote
-    if (_option == 1) {
-        submissions[_submission].votes += amount;
-        total_votes += amount;
-    }
-    if (_option == 2) {
-        total_donations += amount;
-    }
-    if (_option == 3) {
-        total_refunds += amount;
-    }
-
-    // Add back admin votes to the total
-    total_votes += admin_votes;
-
-    // Update funder's balance
-    uint256 previous_amount = previous_vote * amount;
-    if (funders[msg.sender] >= previous_amount) {
-        funders[msg.sender] -= previous_amount;
-    }
-    funders[msg.sender] += amount;
-
-    // Update the vote record
-    votes[msg.sender][_submission] = _option;
-
-    // Add admin votes back to the total
-    total_votes += admin_votes;
 }
 
 
@@ -213,12 +133,6 @@ function add_funds() public payable {
     total_funds += msg.value;
     total_rewards += (msg.value * 95) / 100; // 95% of the funds raised
 
-    for (uint i = 0; i < submissions.length; i++) {
-        if (votes[msg.sender][i] == 1) {
-            submissions[i].votes += msg.value;
-            total_votes += msg.value;
-        }
-    }
 }
 
 receive () external payable {
@@ -235,12 +149,8 @@ fallback () external payable {
 function distribute() public {
     require(admins[msg.sender] == true, "You are not an admin");
     require(block.timestamp > voting_time, "Voting period has not ended");
-    require(total_rewards + total_votes + total_donations + total_refunds > 0, "There's nothing to distribute");
+    require(total_rewards + total_votes > 0, "There's nothing to distribute");
     require(funderAddresses.length > 0, "There are no funders");
-
-    uint256 admin_votes = total_votes / 20; // Calculate the 5% voting power for admins
-
-
 
     // Transfer 5% of the total funds to the platform
     uint256 platformDonation = (total_funds * 5) / 100;
@@ -260,13 +170,10 @@ function distribute() public {
             }
         }
     }
-
-
     // Reset the totals
     total_rewards = 0;
     total_votes = 0;
-    total_donations = 0;
-    total_refunds = 0;
+    total_funds = 0;
 }
 
     // Add a new function to use unused votes
@@ -274,7 +181,7 @@ function use_unused_votes(uint _submission) public {
     require(admins[msg.sender] == true, "You are not an admin");
     require(block.timestamp < voting_time, "Voting period has ended");
     require(_submission < submissions.length, "Invalid submission");
-    require(total_funds - total_votes > 0, "There are no unused votes");
+    require(total_funds - total_votes != 0, "There are no unused votes");
     // Calculate the used admin votes for each submission
 
     uint256 unused_admin_votes = total_funds - total_votes;
